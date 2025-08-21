@@ -6,5 +6,6 @@
 #include <type_traits>
 #include <math.h>
 #include <algorithm>
+#include <string_view>
 
 #endif // !__FILE_Detail_Interface_H
