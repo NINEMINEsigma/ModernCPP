@@ -255,7 +255,8 @@ namespace Internal
 		return name;
 	}
 
-	template <typename T> struct TraitTool
+	template <typename T, bool IsIntegral> struct TraitTool;
+	template <typename T> struct TraitTool<T,false>
 	{
 		template<typename P, bool Derived = true> static constexpr bool Is() { return (TAreSame<T, P> || (Derived && TIsBaseOf<T, P>)); }
 		template<typename P, bool Derived = true> static constexpr bool Is(P) { return (TAreSame<T, P> || (Derived && TIsBaseOf<T, P>)); }
@@ -440,11 +441,6 @@ namespace Internal
 		{
 			return SymbolNameTool<T>();
 		}
-		template<T Value>
-		constexpr static std::string_view ValueName()
-		{
-			return ValueNameTool<T, Value>();
-		}
 
 		static uint32_t Hash(const T& v)
 		{
@@ -462,27 +458,74 @@ namespace Internal
 	public:
 		constexpr static int TypeHash = InjectTypeHash();
 	};
-	template <typename T> struct TraitTool<const          T> : public TraitTool<T> {};
-	template <typename T> struct TraitTool<      volatile T> : public TraitTool<T> {};
-	template <typename T> struct TraitTool<const volatile T> : public TraitTool<T> {};
+	template <typename T> struct TraitTool<T, true> : public TraitTool<T, false>
+	{
+		template<T Value>
+		constexpr static std::string_view ValueName()
+		{
+			return ValueNameTool<T, Value>();
+		}
+	};
+	template <typename T, bool IsIntegral> struct TraitTool<const          T, IsIntegral> : public TraitTool<T,IsIntegral> {};
+	template <typename T, bool IsIntegral> struct TraitTool<      volatile T, IsIntegral> : public TraitTool<T,IsIntegral> {};
+	template <typename T, bool IsIntegral> struct TraitTool<const volatile T, IsIntegral> : public TraitTool<T,IsIntegral> {};
 }
 
-template <typename T> using TTrait = Internal::TraitTool<T>;
-using Bool   = Internal::TraitTool<bool>;
-using Int    = Internal::TraitTool<int>;
-using Float  = Internal::TraitTool<float>;
-using Double = Internal::TraitTool<double>;
-using Long   = Internal::TraitTool<long>;
-using UInt   = Internal::TraitTool<unsigned int>;
-using Int8   = Internal::TraitTool<int8_t>;
-using Int16  = Internal::TraitTool<int16_t>;
-using Int32  = Internal::TraitTool<int32_t>;
-using Int64  = Internal::TraitTool<int64_t>;
-using UInt8  = Internal::TraitTool<uint8_t>;
-using UInt16 = Internal::TraitTool<uint16_t>;
-using UInt32 = Internal::TraitTool<uint32_t>;
-using UInt64 = Internal::TraitTool<uint64_t>;
-using LongDouble = Internal::TraitTool<long double>;
+template <typename T> using TTrait = Internal::TraitTool<T, std::is_integral_v<T>>;
+
+namespace Internal
+{
+	template<typename T> class ValueClass : public TTrait<T>
+	{
+	private:
+		T value;
+		using _Mybase = TTrait<T>;
+	public:
+		ValueClass(const T& value) : value(value) {}
+		ValueClass(T& value) : value(value) {}
+		ValueClass(T&& value) : value(std::move(value)) {}
+		ValueClass<T>& operator=(const T& value) noexcept
+		{
+			this->value = value;
+		}
+		ValueClass<T>& operator=(T& value) noexcept
+		{
+			this->value = value;
+		}
+		ValueClass<T>& operator=(T&& value) noexcept
+		{
+			this->value = std::move(value);
+		}
+		constexpr operator T& ()
+		{
+			return value;
+		}
+		constexpr operator const T& () const
+		{
+			return value;
+		}
+		uint32_t Hash()
+		{
+			return _Mybase::Hash(value);
+		}
+	};
+}
+
+using Bool   = Internal::ValueClass<bool>;
+using Int    = Internal::ValueClass<int>;
+using Float  = Internal::ValueClass<float>;
+using Double = Internal::ValueClass<double>;
+using Long   = Internal::ValueClass<long>;
+using UInt   = Internal::ValueClass<unsigned int>;
+using Int8   = Internal::ValueClass<int8_t>;
+using Int16  = Internal::ValueClass<int16_t>;
+using Int32  = Internal::ValueClass<int32_t>;
+using Int64  = Internal::ValueClass<int64_t>;
+using UInt8  = Internal::ValueClass<uint8_t>;
+using UInt16 = Internal::ValueClass<uint16_t>;
+using UInt32 = Internal::ValueClass<uint32_t>;
+using UInt64 = Internal::ValueClass<uint64_t>;
+using LongDouble = Internal::ValueClass<long double>;
 
 #if !defined(nameofT)&&!defined(nameofEnum)
 template <typename T> constexpr auto __Inject_nameof()
