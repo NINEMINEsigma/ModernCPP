@@ -21,10 +21,15 @@ template <> struct Object<void>
 };
 template <typename DerivedTerminal> struct Object : private Object<void>
 {
+	constexpr DerivedTerminal* Origin() noexcept
+	{
+		return static_cast<DerivedTerminal*>(this);
+	}
+
 	using TDerivedTerminal = DerivedTerminal;
 	constexpr DerivedTerminal* operator->() noexcept
 	{
-		return static_cast<DerivedTerminal*>(this);
+		return Origin();
 	}
 
 	template<typename T,
