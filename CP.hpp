@@ -12,5 +12,6 @@
 #include "detail/CP/MaxMin.hpp"
 #include "detail/CP/Arithmetic.hpp"
 #include "detail/CP/Typen.hpp"
+#include "detail\CP\CPString.hpp"
 
 #endif // __FILE_Operator_Hpp
