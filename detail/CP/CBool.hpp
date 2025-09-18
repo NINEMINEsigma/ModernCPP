@@ -18,13 +18,13 @@ namespace Internal
 	template<bool First, bool... Value> class CAnd_t;
 	template<bool First, bool... Value> class COr_t;
 
-	template<> class CAnd_t<true> : public std::true_type {};
-	template<> class CAnd_t<false> : public std::false_type {};
+	template<             > class CAnd_t<true> : public std::true_type {};
+	template<             > class CAnd_t<false> : public std::false_type {};
 	template<bool... Value> class CAnd_t<true, Value...> : public CAnd_t<Value...> {};
 	template<bool... Value> class CAnd_t<false, Value...> : public std::false_type {};
 
-	template<> class COr_t<true> : public std::true_type {};
-	template<> class COr_t<false> : public std::false_type {};
+	template<             > class COr_t<true> : public std::true_type {};
+	template<             > class COr_t<false> : public std::false_type {};
 	template<bool... Value> class COr_t<true, Value...> : public std::true_type {};
 	template<bool... Value> class COr_t<false, Value...> : public COr_t<Value...> {};
 }

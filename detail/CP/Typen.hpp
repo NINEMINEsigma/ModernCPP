@@ -2,14 +2,79 @@
 #ifndef __FILE_Detail_CP_Typen_Hpp
 #define __FILE_Detail_CP_Typen_Hpp
 
-#include "detail/CP/CHash.hpp"
+#include "CHash.hpp"
+
+#pragma region TIdentity
+
+////////////////////////
+// TIdentity
+
+/**
+ * Returns the same type passed to it.  This is useful in a few cases, but mainly for inhibiting template argument deduction in function arguments, e.g.:
+ *
+ * template <typename T>
+ * void Func1(T Val); // Can be called like Func(123) or Func<int>(123);
+ *
+ * template <typename T>
+ * void Func2(typename TIdentity<T>::Type Val); // Must be called like Func<int>(123)
+ */
+template <typename T>
+struct TIdentity
+{
+	typedef T Type;
+};
+
+// TIdentity
+//////////////////////////
+
+#pragma endregion
 
 template <typename Base, typename Derived> constexpr bool TIsBaseOf = std::is_base_of_v<Base, Derived>;
 
-template <typename A, typename B> constexpr bool TAreSame = std::is_same_v<A, B>;
+#pragma region TAreSame
+
+/////////////////////////
+// TAreSame
 
 namespace Internal
 {
+	template <typename A, typename B>  struct TAreSameTool { static constexpr bool Value = false; };
+	template <typename A            >  struct TAreSameTool<A,A> { static constexpr bool Value = true; };
+}
+
+template <typename A, typename B> constexpr bool TAreSame = Internal::TAreSameTool<A, B>::Value;
+
+// TAreSame
+////////////////////////
+
+#pragma endregion
+
+#pragma region Conditional Type
+
+///////////////////////////////
+// About Conditional
+
+namespace Internal
+{
+	/** Chooses between two different classes based on a boolean. */
+	template<bool Predicate, typename TrueClass, typename FalseClass>
+	class TChooseClass;
+
+	template<typename TrueClass, typename FalseClass>
+	class TChooseClass<true, TrueClass, FalseClass>
+	{
+	public:
+		typedef TrueClass Result;
+	};
+
+	template<typename TrueClass, typename FalseClass>
+	class TChooseClass<false, TrueClass, FalseClass>
+	{
+	public:
+		typedef FalseClass Result;
+	};
+
+
 	template<typename IndexType, IndexType Index, typename... Types> struct TConditionalTool
 	{
 
@@ -32,27 +97,167 @@ namespace Internal
 	template<bool Pr, typename First, typename Second>
 	struct TConditionalTool<bool, Pr, First, Second>
 	{
-		using Type = std::conditional_t<Pr, First, Second>;
+		using Type = typename TChooseClass<Pr, First, Second>::Result;
 	};
 }
 
 template<bool Pr, typename First, typename Second> using TChoose = typename Internal::TConditionalTool<bool, Pr, First, Second>::Type;
 template<int Index, typename... Types> using TConditional = typename Internal::TConditionalTool<int, Index, Types...>::Type;
 
-template <typename T> using TDecay = std::decay_t<T>;
+// Conditional
+///////////////////////////////
 
-template <typename T> constexpr bool TIsP  = std::is_pointer_v<T>;
-template <typename T> constexpr bool TIsC  = std::is_const_v<T>;
-template <typename T> constexpr bool TIsV  = std::is_volatile_v<T>;
-template <typename T> constexpr bool TIsR  = std::is_reference_v<T>;
-template <typename T> constexpr bool TIsF  = std::is_function_v<T>;
+#pragma endregion
+
+template <typename T> constexpr bool TIsPointer  = std::is_pointer_v<T>;
+template <typename T> constexpr bool TIsConst  = std::is_const_v<T>;
+template <typename T> constexpr bool TIsVolatile  = std::is_volatile_v<T>;
+template <typename T> constexpr bool TIsRef  = std::is_reference_v<T>;
+template <typename T> constexpr bool TIsFunc  = std::is_function_v<T>;
 template <typename T> constexpr bool TIsLR = std::is_lvalue_reference_v<T>;
 template <typename T> constexpr bool TIsRR = std::is_rvalue_reference_v<T>;
-template <typename T> constexpr bool TIsCV = TIsC<T> && TIsV<T>;
-template <typename T> constexpr bool TIsIt = TIsP<T> || TIsLR<decltype(*std::declval<T>())>;
-template <typename T> constexpr bool TIsVoid = std::is_same_v<void, T>;
-template <typename T> constexpr bool THasVirtual = std::has_virtual_destructor_v<T>;
-template <typename T, typename C> constexpr bool TIsCStr = TAreSame<T, const C*>&& TAreSame<T, C*>;
+template <typename T> constexpr bool TIsCV = TIsConst<T> && TIsVolatile<T>;
+template <typename T> constexpr bool TIsIt = TIsPointer<T> || TIsLR<decltype(*std::declval<T>())>;
+template <typename T> constexpr bool TIsVoid = TAreSame<void, T>;
+template <typename T> constexpr bool TIsVirtual = std::has_virtual_destructor_v<T>;
+template <typename T> constexpr bool TIsPolymorphic = std::is_polymorphic_v<T>;
+template <typename T> constexpr bool TIsAbstract = std::is_abstract_v<T>;
+template <typename T> constexpr bool TIsClass = std::is_class_v<T>;
+template <typename T> constexpr bool TIsPOD = std::is_pod_v<T>;
+template <typename T, typename C = char> constexpr bool TIsCStr = TAreSame<T, const C*> && TAreSame<T, C*>;
+template <typename T, typename... Args> constexpr bool TIsConstructible = std::is_constructible_v<T, Args...>;
+
+#pragma region About Enum
+
+template <typename T> constexpr bool TIsEnum = std::is_enum_v<T>;
+
+/////////////////////////
+// TIsEnumClass
+
+namespace Internal
+{
+	template <typename T>
+	struct TIsEnumConvertibleToIntTool
+	{
+		static char(&Resolve(int))[2];
+		static char Resolve(...);
+
+		enum { Value = sizeof(Resolve(T())) - 1 };
+	};
+}
+
+/**
+ * Traits class which tests if a type is arithmetic.
+ */
+
+template <typename T> constexpr bool TIsEnumClass = TIsEnum<T> && !Internal::TIsEnumConvertibleToIntTool<T>;
+
+// TIsEnumClass
+///////////////////////////
+
+#pragma endregion
+
+#pragma region TIsTrivial
+
+/////////////////////////
+// TIsTriviallyDestructible
+
+template <typename T> constexpr bool TIsTriviallyDestructible = std::is_trivially_destructible_v<T>;
+
+// TIsTriviallyDestructible
+///////////////////////////
+
+/////////////////////////
+// TIsTriviallyCopyConstructible
+
+template <typename T> constexpr bool TIsTriviallyCopyConstructible = std::is_trivially_constructible_v<T>;
+
+// TIsTriviallyCopyConstructible
+//////////////////////////
+
+//////////////////////////
+// TIsTriviallyCopyAssignable
+
+template <typename T> constexpr bool TIsTriviallyCopyAssignable = std::is_trivially_copyable_v<T>;
+
+// TIsTriviallyCopyAssignable
+///////////////////////////
+
+///////////////////////////
+// TIsTrivial
+
+template <typename T> constexpr bool TIsTrivial = std::is_trivial_v<T>;
+
+// TIsTrivial
+////////////////////////////
+
+#pragma endregion
+
+#pragma region TIsMemberPointerTool
+
+///////////////////////////////
+// TIsMemberPointer
+
+namespace Internal
+{
+	/**
+	 * Traits class which tests if a type is a pointer to member (data member or member function).
+	 */
+	template <typename T>
+	struct TIsMemberPointerTool
+	{
+		constexpr static bool Value = false;
+	};
+
+	template <typename T, typename U> struct TIsMemberPointerTool<T U::*> { constexpr static bool Value = true; };
+
+	template <typename T> struct TIsMemberPointerTool<const          T> { constexpr static bool Value = TIsMemberPointerTool<T>::Value; };
+	template <typename T> struct TIsMemberPointerTool<      volatile T> { constexpr static bool Value = TIsMemberPointerTool<T>::Value; };
+	template <typename T> struct TIsMemberPointerTool<const volatile T> { constexpr static bool Value = TIsMemberPointerTool<T>::Value; };
+}
+
+template <typename T> constexpr bool TIsMemberPointer = Internal::TIsMemberPointerTool<T>::Value;
+
+// TIsMemberPointer
+///////////////////////////////
+
+#pragma endregion
+
+#pragma region TIsInitializerList
+
+////////////////////////////////////
+// TIsInitializerList
+
+namespace Internal
+{
+	/**
+	 * Traits class which tests if a type is an initializer list.
+	 */
+	template <typename T>
+	struct TIsInitializerListTool
+	{
+		static constexpr bool Value = false;
+	};
+
+	template <typename T>
+	struct TIsInitializerListTool<std::initializer_list<T>>
+	{
+		static constexpr bool Value = true;
+	};
+
+	template <typename T> struct TIsInitializerListTool<const          T> { static constexpr Value = TIsInitializerListTool<T>::Value; };
+	template <typename T> struct TIsInitializerListTool<      volatile T> { static constexpr Value = TIsInitializerListTool<T>::Value; };
+	template <typename T> struct TIsInitializerListTool<const volatile T> { static constexpr Value = TIsInitializerListTool<T>::Value; };
+}
+
+template <typename T> constexpr bool TIsInitializerList = Internal::TIsInitializerListTool<T>::Value;
+
+// TIsInitializerList
+////////////////////////////////////
+
+#pragma endregion
+
+#pragma region Remove Type
 
 template <typename T> using TRemoveP  = std::remove_pointer_t<T>;
 template <typename T> using TRemoveC  = std::remove_const_t<T>;
@@ -60,7 +265,205 @@ template <typename T> using TRemoveV  = std::remove_volatile_t<T>;
 template <typename T> using TRemoveR  = std::remove_reference_t<T>;
 template <typename T> using TRemoveCV = std::remove_cv_t<T>;
 
-template <bool Pr, typename T = void> using TEnableIf = std::enable_if_t<Pr, T>;
+#pragma endregion
+
+#pragma region About Array
+
+#pragma region IsArray
+
+/**
+ * Traits class which tests if a type is a C++ array.
+ */
+template <typename T>             struct TIsArray { constexpr static bool Value = false; };
+template <typename T>             struct TIsArray<T[]> { constexpr static bool Value = true; };
+template <typename T, uint32_t N> struct TIsArray<T[N]> { constexpr static bool Value = true; };
+
+/**
+ * Traits class which tests if a type is a bounded C++ array.
+ */
+template <typename T>             struct TIsBoundedArray { constexpr static bool Value = false; };
+template <typename T, uint32_t N> struct TIsBoundedArray<T[N]> { constexpr static bool Value = true; };
+
+/**
+ * Traits class which tests if a type is an unbounded C++ array.
+ */
+template <typename T> struct TIsUnboundedArray { constexpr static bool Value = false; };
+template <typename T> struct TIsUnboundedArray<T[]> { constexpr static bool Value = true; };
+
+#pragma endregion
+
+#pragma region Ref Version
+
+/**
+ * Type trait which returns true if the type T is an array or a reference to an array of ArrType.
+ */
+template <typename T, typename ArrType>
+struct TIsArrayOrRefOfType
+{
+	constexpr static bool Value = false;
+};
+
+template <typename ArrType> struct TIsArrayOrRefOfType<               ArrType[], ArrType> { constexpr static bool Value = true; };
+template <typename ArrType> struct TIsArrayOrRefOfType<const          ArrType[], ArrType> { constexpr static bool Value = true; };
+template <typename ArrType> struct TIsArrayOrRefOfType<      volatile ArrType[], ArrType> { constexpr static bool Value = true; };
+template <typename ArrType> struct TIsArrayOrRefOfType<const volatile ArrType[], ArrType> { constexpr static bool Value = true; };
+
+template <typename ArrType, unsigned int N> struct TIsArrayOrRefOfType<               ArrType[N], ArrType> { constexpr static bool Value = true; };
+template <typename ArrType, unsigned int N> struct TIsArrayOrRefOfType<const          ArrType[N], ArrType> { constexpr static bool Value = true; };
+template <typename ArrType, unsigned int N> struct TIsArrayOrRefOfType<      volatile ArrType[N], ArrType> { constexpr static bool Value = true; };
+template <typename ArrType, unsigned int N> struct TIsArrayOrRefOfType<const volatile ArrType[N], ArrType> { constexpr static bool Value = true; };
+
+template <typename ArrType, unsigned int N> struct TIsArrayOrRefOfType<               ArrType(&)[N], ArrType> { constexpr static bool Value = true; };
+template <typename ArrType, unsigned int N> struct TIsArrayOrRefOfType<const          ArrType(&)[N], ArrType> { constexpr static bool Value = true; };
+template <typename ArrType, unsigned int N> struct TIsArrayOrRefOfType<      volatile ArrType(&)[N], ArrType> { constexpr static bool Value = true; };
+template <typename ArrType, unsigned int N> struct TIsArrayOrRefOfType<const volatile ArrType(&)[N], ArrType> { constexpr static bool Value = true; };
+
+#pragma endregion
+
+
+#pragma endregion
+
+#pragma region TEnableIf
+
+////////////////////////
+// TEnableIf
+
+namespace Internal
+{
+	/**
+	 * Includes a function in an overload set if the predicate is true.  It should be used similarly to this:
+	 *
+	 * // This function will only be instantiated if SomeTrait<T>::Value is true for a particular T
+	 * template <typename T>
+	 * typename TEnableIf<SomeTrait<T>::Value, ReturnType>::Type Function(const T& Obj)
+	 * {
+	 *     ...
+	 * }
+	 *
+	 * ReturnType is the real return type of the function.
+	 */
+	template <bool Predicate, typename Result = void>
+	class TEnableIfTool;
+
+	template <typename Result>
+	class TEnableIfTool<true, Result>
+	{
+	public:
+		using type = Result;
+		using Type = Result;
+	};
+
+	template <typename Result>
+	class TEnableIfTool<false, Result>
+	{
+	};
+
+}
+
+template <bool Pr, typename T = void> using TEnableIf = typename Internal::TEnableIfTool<Pr, T>::Type;
+
+// TEnableIf
+////////////////////////
+
+////////////////////////
+// TLazyEnableIf
+
+namespace Internal
+{
+	/**
+	 * This is a variant of the above that will determine the return type 'lazily', i.e. only if the function is enabled.
+	 * This is useful when the return type isn't necessarily legal code unless the enabling condition is true.
+	 *
+	 * // This function will only be instantiated if SomeTrait<T>::Value is true for a particular T.
+	 * // The function's return type is typename Transform<T>::Type.
+	 * template <typename T>
+	 * typename TLazyEnableIf<SomeTrait<T>::Value, Transform<T>>::Type Function(const T& Obj)
+	 * {
+	 *     ...
+	 * }
+	 *
+	 * See boost::lazy_enable_if for more details.
+	 */
+	template <bool Predicate, typename Func>
+	class TLazyEnableIfTool;
+
+	template <typename Func>
+	class TLazyEnableIfTool<true, Func>
+	{
+	public:
+		using type = typename Func::Type;
+		using Type = typename Func::Type;
+	};
+
+	template <typename Func>
+	class TLazyEnableIfTool<false, Func>
+	{
+	};
+}
+
+template <bool Predicate, typename Func> using TLazyEnableIf = Internal::TLazyEnableIfTool<Predicate, Func>;
+
+// TLazyEnableIf
+////////////////////////
+
+#pragma endregion
+
+#pragma region TDecay
+
+/////////////////////
+// TDeacy
+
+namespace Internal
+{
+	template <typename T>
+	struct TDecayNonReference
+	{
+		using Type = TRemoveCV<T>;
+	};
+
+	template <typename T>
+	struct TDecayNonReference<T[]>
+	{
+		using Type = T*;
+	};
+
+	template <typename T, uint32_t N>
+	struct TDecayNonReference<T[N]>
+	{
+		using Type = T*;
+	};
+
+	template <typename RetType, typename... Params>
+	struct TDecayNonReference<RetType(Params...)>
+	{
+		using Type = RetType(*)(Params...);
+	};
+
+
+	/**
+	 * Returns the decayed type of T, meaning it removes all references, qualifiers and
+	 * applies array-to-pointer and function-to-pointer conversions.
+	 *
+	 * http://en.cppreference.com/w/cpp/types/decay
+	 */
+	template <typename T>
+	struct TDecayTool
+	{
+		typedef typename TDecayNonReference<typename TRemoveReference<T>::Type>::Type Type;
+	};
+}
+
+template <typename T> using TDecay = typename Internal::TDecayTool<T>::Type;
+
+// TDeacy
+//////////////////////
+
+#pragma endregion
+
+#pragma region THasToString
+
+////////////////////////////
+// THasToString
 
 namespace Internal
 {
@@ -127,6 +530,16 @@ namespace Internal
 
 template <typename T> constexpr bool THasToString = Internal::StringAbleTool<T>::Value;
 
+// THasToString
+////////////////////////////
+
+#pragma endregion
+
+#pragma region TIsConvertible
+
+/////////////////////////////
+// TIsConvertible
+
 namespace Internal
 {
 	template <typename From, typename To>
@@ -145,6 +558,16 @@ template <typename From, typename To> constexpr bool TIsConvertible = Internal::
 template <typename From, typename To> constexpr bool TIsPointerConvertible   = TIsConvertible<From*, To*>;
 template <typename From, typename To> constexpr bool TIsReferenceConvertible = TIsConvertible<From&, To&>;
 
+// TIsConvertible
+/////////////////////////////
+
+#pragma endregion
+
+#pragma region TCopyQualifiers
+
+///////////////////////////////
+// TCopyQualifiers
+
 namespace Internal
 {
 	/**
@@ -161,10 +584,73 @@ namespace Internal
 
 template <typename From, typename To> using TCopyQualifiers = typename Internal::TCopyQualifiersTool<From, To>::Type;
 
-template <typename From, typename To> constexpr bool TLosesQualifiers = !TAreSame<TCopyQualifiers<From, To>, To>;
+// TCopyQualifiers
+////////////////////////////////
+
+////////////////////////////////
+// TCopyQualifiersAndRefs
 
 namespace Internal
 {
+	/**
+	 * Copies the cv-qualifiers and references from one type to another
+	 */
+	template <typename From, typename To> struct TCopyQualifiersAndRefsTool { using Type = typename TCopyQualifiersTool<From, To>::Type; };
+	template <typename From, typename To> struct TCopyQualifiersAndRefsTool<From, To& > { using Type = typename TCopyQualifiersTool<From, To>::Type&; };
+	template <typename From, typename To> struct TCopyQualifiersAndRefsTool<From, To&&> { using Type = typename TCopyQualifiersTool<From, To>::Type&&; };
+	template <typename From, typename To> struct TCopyQualifiersAndRefsTool<From&, To  > { using Type = typename TCopyQualifiersTool<From, To>::Type&; };
+	template <typename From, typename To> struct TCopyQualifiersAndRefsTool<From&, To& > { using Type = typename TCopyQualifiersTool<From, To>::Type&; };
+	template <typename From, typename To> struct TCopyQualifiersAndRefsTool<From&, To&&> { using Type = typename TCopyQualifiersTool<From, To>::Type&; };
+	template <typename From, typename To> struct TCopyQualifiersAndRefsTool<From&&, To  > { using Type = typename TCopyQualifiersTool<From, To>::Type&&; };
+	template <typename From, typename To> struct TCopyQualifiersAndRefsTool<From&&, To& > { using Type = typename TCopyQualifiersTool<From, To>::Type&; };
+	template <typename From, typename To> struct TCopyQualifiersAndRefsTool<From&&, To&&> { using Type = typename TCopyQualifiersTool<From, To>::Type&&; };
+}
+
+template <typename From, typename To> using TCopyQualifiersAndRefsFromTo_T = typename Internal::TCopyQualifiersAndRefsTool<From, To>::Type;
+
+// TCopyQualifiersAndRefs
+////////////////////////////////
+
+template <typename From, typename To> constexpr bool TLosesQualifiers = !TAreSame<TCopyQualifiers<From, To>, To>;
+
+#pragma endregion
+
+#pragma region TLosesQualifiersFromTo
+
+///////////////////////
+// TLosesQualifiersFromTo
+
+namespace Internal
+{
+	/**
+	 * Tests if qualifiers are lost between one type and another, e.g.:
+	 *
+	 * TLosesQualifiersFromTo<const    T1,                T2>::Value == true
+	 * TLosesQualifiersFromTo<volatile T1, const volatile T2>::Value == false
+	 */
+	template <typename From, typename To>
+	struct TLosesQualifiersFromToTool
+	{
+		constexpr static bool Value = !TAreSame<TCopyQualifiersFromTo<From, To>, To>;
+	};
+}
+
+template <typename From, typename To> using TLosesQualifiersFromTo = Internal::TLosesQualifiersFromToTool<From, To>;
+
+// TLosesQualifiersFromTo
+///////////////////////////
+
+#pragma endregion
+
+#pragma region TTrait
+
+//////////////////////
+// TTrait
+
+namespace Internal
+{
+#pragma region Tools
+
 	struct PrettyFunctionTag {};
 
 	template<typename T>
@@ -255,9 +741,30 @@ namespace Internal
 		return name;
 	}
 
+#pragma endregion
+
 	template <typename T, bool IsIntegral> struct TraitTool;
 	template <typename T> struct TraitTool<T,false>
 	{
+	public:
+		constexpr static bool IsPointer = TIsPointer<T>;
+		constexpr static bool IsRef = TIsRef<T>;
+		constexpr static bool IsVoid = TIsVoid<T>;
+		constexpr static bool IsVirtual = TIsVirtual<T>;
+		constexpr static bool IsPolymorphic = TIsPolymorphic<T>;
+		constexpr static bool IsAbstract = TIsAbstract<T>;
+		constexpr static bool IsClass = TIsClass<T>;
+		constexpr static bool IsPOD = TIsPOD<T>;
+		constexpr static bool IsEnum = TIsEnum<T>;
+		constexpr static bool IsEnumClass = TIsEnum<T>;
+		constexpr static bool IsTriviallyDestructible = TIsTriviallyDestructible<T>;
+		constexpr static bool IsTriviallyCopyConstructible = TIsTriviallyCopyConstructible<T>;
+		constexpr static bool IsTriviallyCopyAssignable = TIsTriviallyCopyAssignable<T>;
+		constexpr static bool IsTrivial = TIsTrivial<T>;
+		constexpr static bool IsMemberPointer = TIsMemberPointer<T>;
+		constexpr static bool IsInitializerList = TIsInitializerList<T>;
+		constexpr static bool HasToString = THasToString<T>;
+	public:
 		template<typename P, bool Derived = true> static constexpr bool Is() { return (TAreSame<T, P> || (Derived && TIsBaseOf<T, P>)); }
 		template<typename P, bool Derived = true> static constexpr bool Is(P) { return (TAreSame<T, P> || (Derived && TIsBaseOf<T, P>)); }
 		template<typename P, bool Derived = true> static constexpr bool Is(P from, T& to)
@@ -275,10 +782,13 @@ namespace Internal
 			static auto symbol = typeid(T).hash_code();
 			return (intptr_t)&symbol;
 		}
+
+		constexpr static uint32_t NewPtrMemorySize = sizeof(decltype(Symbol())) + sizeof(T);
+
 		static T* New(void* memory, size_t capacity)
 		{
 			using TSymbol = decltype(Symbol());
-			constexpr auto size = sizeof(TSymbol) + sizeof(T);
+			constexpr auto size = NewPtrMemorySize;
 			if (capacity < size || memory == nullptr)
 				return nullptr;
 			char* ptr = new(memory) char[size];
@@ -445,10 +955,18 @@ namespace Internal
 		static uint32_t Hash(const T& v)
 		{
 			if constexpr (std::is_integral_v<T>)
-				return GetTypeHash(v);
+				return Hash(v);
 			else
-				return GetTypeHash(&v);
+				return THash(&v);
 		}
+		static uint32_t Hash(T* v)
+		{
+			if constexpr (std::is_integral_v<T>)
+				return Hash(*v);
+			else
+				return THash(v);
+		}
+
 	private:
 		constexpr static uint32_t InjectTypeHash()
 		{
@@ -473,43 +991,84 @@ namespace Internal
 
 template <typename T> using TTrait = Internal::TraitTool<T, std::is_integral_v<T>>;
 
+// TTrait
+////////////////////////
+
+////////////////////////
+// ValueTrait
+
 namespace Internal
 {
 	template<typename T> class ValueClass : public TTrait<T>
 	{
 	private:
-		T value;
 		using _Mybase = TTrait<T>;
+		char MyMemoryInside[NewPtrMemorySize];
+		T* MyCachePtr;
 	public:
-		ValueClass(const T& value) : value(value) {}
-		ValueClass(T& value) : value(value) {}
-		ValueClass(T&& value) : value(std::move(value)) {}
-		ValueClass<T>& operator=(const T& value) noexcept
+		template<typename = TEnableIf<TIsConstructible<T>>>
+		ValueClass()
 		{
-			this->value = value;
+			MyCachePtr = _Mybase::New(MyMemoryInside, NewPtrMemorySize);
+			new(MyCachePtr) T();
 		}
-		ValueClass<T>& operator=(T& value) noexcept
+		template<typename First, typename = TEnableIf<TIsConstructible<T, First>>>
+		ValueClass(First first)
 		{
-			this->value = value;
+			MyCachePtr = _Mybase::New(MyMemoryInside, NewPtrMemorySize);
+			new(MyCachePtr) T(first);
 		}
-		ValueClass<T>& operator=(T&& value) noexcept
+		template<typename First, typename Second,
+			typename = TEnableIf<TIsConstructible<T, First, Second>>>
+		ValueClass(First first, Second second)
 		{
-			this->value = std::move(value);
+			MyCachePtr = _Mybase::New(MyMemoryInside, NewPtrMemorySize);
+			new(MyCachePtr) T(first, second);
 		}
+		template<typename First, typename Second, typename Third,
+			typename = TEnableIf<TIsConstructible<T, First, Second, Third>>>
+		ValueClass(First first, Second second, Third third)
+		{
+			MyCachePtr = _Mybase::New(MyMemoryInside, NewPtrMemorySize);
+			new(MyCachePtr) T(first, second, third);
+		}
+		template<typename First, typename Second, typename Third, typename Other,
+			typename = TEnableIf<TIsConstructible<T, First, Second, Third, Other>>>
+		ValueClass(First first, Second second, Third third, Other other)
+		{
+			MyCachePtr = _Mybase::New(MyMemoryInside, NewPtrMemorySize);
+			new(MyCachePtr) T(first, second, third, other);
+		}
+
+		T& ReadValue()
+		{
+			return *MyCachePtr;
+		}
+
+		const T& ReadValue() const
+		{
+			return *MyCachePtr;
+		}
+
 		constexpr operator T& ()
 		{
-			return value;
+			return *MyCachePtr;
 		}
+
 		constexpr operator const T& () const
 		{
-			return value;
+			return *MyCachePtr;
 		}
+
 		uint32_t Hash()
 		{
-			return _Mybase::Hash(value);
+			return _Mybase::Hash(MyCachePtr);
 		}
 	};
 }
+
+// ValueTrait
+////////////////////////
 
 using Bool   = Internal::ValueClass<bool>;
 using Int    = Internal::ValueClass<int>;
@@ -527,36 +1086,34 @@ using UInt32 = Internal::ValueClass<uint32_t>;
 using UInt64 = Internal::ValueClass<uint64_t>;
 using LongDouble = Internal::ValueClass<long double>;
 
-#if !defined(nameofT)&&!defined(nameofEnum)
-template <typename T> constexpr auto __Inject_nameof()
+#pragma endregion
+
+#pragma region nameof
+
+namespace Internal
 {
-	return TTrait<T>::SymbolName();
+	template <typename T> constexpr auto __Inject_nameof_type()
+	{
+		return TTrait<T>::SymbolName();
+	}
+	template <typename T, T Value> constexpr auto __Inject_nameof_value()
+	{
+		return TTrait<T>::ValueName<Value>();
+	}
 }
-template <typename T, T Value> constexpr auto __Inject_nameof()
-{
-	return TTrait<T>::ValueName<Value>();
-}
-#define nameofT(x) __Inject_nameof<x>();
-#define nameofEnum(x) __Inject_nameof<decltype(x),x>();
-#else
-template <typename T> constexpr auto nameof()
-{
-	return TTrait<T>::SymbolName();
-}
-template <typename T, T Value> constexpr auto nameof()
-{
-	return TTrait<T>::ValueName<Value>();
-}
-#endif // !nameof
+#define nameof(x) Internal::__Inject_nameof_type<x>();
+#define nameofEnum(x) Internal::__Inject_nameof_value<decltype(x),x>();
+
+#pragma endregion
 
 
-template <typename T> using TUnwrapped = TEnableIf<TIsIt<T>, TConditional<TIsP<T>, TRemoveP<T>, decltype(*std::declval<T>())>>;
+template <typename T> using TUnwrapped = TEnableIf<TIsIt<T>, TConditional<TIsPointer<T>, TRemoveP<T>, decltype(*std::declval<T>())>>;
 template <typename T, typename Unwrapped = TUnwrapped<T>> decltype(auto) Unwrapping(T from)
 {
 	return *from;
 }
 
-template <typename From, typename To, bool = TIsConvertible<TUnwrapped<From, To>> || TIsConvertible<From, To>> To Cast(From data)
+template <typename From, typename To, bool = TIsConvertible<TUnwrapped<From>, To> || TIsConvertible<From, To>> To Cast(From data)
 {
 	if constexpr (TIsConvertible<From, To>)
 		return static_cast<To>(data);
